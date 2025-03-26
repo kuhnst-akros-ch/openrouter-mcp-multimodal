@@ -56,7 +56,7 @@ jobs:
         run: npm test || echo "No tests found"
       
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: dist
           path: dist/
@@ -98,7 +98,7 @@ jobs:
         run: npm cache clean --force && npm install --legacy-peer-deps --no-optional
       
       - name: Download build artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist/
