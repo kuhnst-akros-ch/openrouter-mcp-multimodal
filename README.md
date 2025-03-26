@@ -1,5 +1,9 @@
 # OpenRouter MCP Multimodal Server
 
+[![Build Status](https://github.com/stabgan/openrouter-mcp-multimodal/actions/workflows/publish.yml/badge.svg)](https://github.com/stabgan/openrouter-mcp-multimodal/actions/workflows/publish.yml)
+[![npm version](https://img.shields.io/npm/v/@stabgan/openrouter-mcp-multimodal.svg)](https://www.npmjs.com/package/@stabgan/openrouter-mcp-multimodal)
+[![Docker Pulls](https://img.shields.io/docker/pulls/stabgandocker/openrouter-mcp-multimodal.svg)](https://hub.docker.com/r/stabgandocker/openrouter-mcp-multimodal)
+
 An MCP (Model Context Protocol) server that provides chat and image analysis capabilities through OpenRouter.ai's diverse model ecosystem. This server combines text chat functionality with powerful image analysis capabilities.
 
 ## Features
@@ -25,6 +29,20 @@ An MCP (Model Context Protocol) server that provides chat and image analysis cap
   - Smart model information caching
   - Exponential backoff for retries
   - Automatic rate limit handling
+
+## Installation
+
+### Option 1: Install via npm
+
+```bash
+npm install -g @stabgan/openrouter-mcp-multimodal
+```
+
+### Option 2: Run via Docker
+
+```bash
+docker run -i -e OPENROUTER_API_KEY=your-api-key-here stabgandocker/openrouter-mcp-multimodal:latest
+```
 
 ## Quick Start Configuration
 
@@ -91,7 +109,7 @@ Add one of the following configurations to your MCP settings file (e.g., `cline_
         "-i",
         "-e", "OPENROUTER_API_KEY=your-api-key-here",
         "-e", "OPENROUTER_DEFAULT_MODEL=anthropic/claude-3.5-sonnet",
-        "stabgan/openrouter-mcp-multimodal:latest"
+        "stabgandocker/openrouter-mcp-multimodal:latest"
       ]
     }
   }
