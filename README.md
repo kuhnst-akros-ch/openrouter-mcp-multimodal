@@ -26,32 +26,92 @@ An MCP (Model Context Protocol) server that provides chat and image analysis cap
   - Exponential backoff for retries
   - Automatic rate limit handling
 
-## Installation
-
-```bash
-npm install @stabgan/openrouter-mcp-multimodal
-```
-
-## Configuration
+## Quick Start Configuration
 
 ### Prerequisites
 
 1. Get your OpenRouter API key from [OpenRouter Keys](https://openrouter.ai/keys)
 2. Choose a default model (optional)
 
-### Setup
+### MCP Configuration Options
 
-Add the server to your MCP settings file (e.g., `cline_mcp_settings.json` or `claude_desktop_config.json`):
+Add one of the following configurations to your MCP settings file (e.g., `cline_mcp_settings.json` or `claude_desktop_config.json`):
+
+#### Option 1: Using npx (Node.js)
 
 ```json
 {
   "mcpServers": {
-    "openrouter_multimodal": {
+    "openrouter": {
       "command": "npx",
-      "args": ["@stabgan/openrouter-mcp-multimodal"],
+      "args": [
+        "-y",
+        "@stabgan/openrouter-mcp-multimodal"
+      ],
       "env": {
         "OPENROUTER_API_KEY": "your-api-key-here",
-        "OPENROUTER_DEFAULT_MODEL": "optional-default-model"
+        "OPENROUTER_DEFAULT_MODEL": "anthropic/claude-3.5-sonnet"
+      }
+    }
+  }
+}
+```
+
+#### Option 2: Using uv (Python Package Manager)
+
+```json
+{
+  "mcpServers": {
+    "openrouter": {
+      "command": "uv",
+      "args": [
+        "run",
+        "-m",
+        "openrouter_mcp_multimodal"
+      ],
+      "env": {
+        "OPENROUTER_API_KEY": "your-api-key-here",
+        "OPENROUTER_DEFAULT_MODEL": "anthropic/claude-3.5-sonnet"
+      }
+    }
+  }
+}
+```
+
+#### Option 3: Using Docker
+
+```json
+{
+  "mcpServers": {
+    "openrouter": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "-e", "OPENROUTER_API_KEY=your-api-key-here",
+        "-e", "OPENROUTER_DEFAULT_MODEL=anthropic/claude-3.5-sonnet",
+        "stabgan/openrouter-mcp-multimodal:latest"
+      ]
+    }
+  }
+}
+```
+
+#### Option 4: Using Smithery (recommended)
+
+```json
+{
+  "mcpServers": {
+    "openrouter": {
+      "command": "smithery",
+      "args": [
+        "run",
+        "stabgan/openrouter-mcp-multimodal"
+      ],
+      "env": {
+        "OPENROUTER_API_KEY": "your-api-key-here",
+        "OPENROUTER_DEFAULT_MODEL": "anthropic/claude-3.5-sonnet"
       }
     }
   }
@@ -66,7 +126,7 @@ Send text or multimodal messages to OpenRouter models:
 
 ```javascript
 use_mcp_tool({
-  server_name: "openrouter_multimodal",
+  server_name: "openrouter",
   tool_name: "chat_completion",
   arguments: {
     model: "google/gemini-2.5-pro-exp-03-25:free", // Optional if default is set
@@ -89,7 +149,7 @@ For multimodal messages with images:
 
 ```javascript
 use_mcp_tool({
-  server_name: "openrouter_multimodal",
+  server_name: "openrouter",
   tool_name: "chat_completion",
   arguments: {
     model: "anthropic/claude-3.5-sonnet",
@@ -120,7 +180,7 @@ Analyze a single image with an optional question:
 
 ```javascript
 use_mcp_tool({
-  server_name: "openrouter_multimodal",
+  server_name: "openrouter",
   tool_name: "analyze_image",
   arguments: {
     image_path: "/absolute/path/to/image.jpg",
@@ -136,7 +196,7 @@ Analyze multiple images with a single prompt:
 
 ```javascript
 use_mcp_tool({
-  server_name: "openrouter_multimodal",
+  server_name: "openrouter",
   tool_name: "multi_image_analysis",
   arguments: {
     images: [
@@ -160,7 +220,7 @@ Search and filter available models:
 
 ```javascript
 use_mcp_tool({
-  server_name: "openrouter_multimodal",
+  server_name: "openrouter",
   tool_name: "search_models",
   arguments: {
     query: "claude", // Optional text search
@@ -179,7 +239,7 @@ Get detailed information about a specific model:
 
 ```javascript
 use_mcp_tool({
-  server_name: "openrouter_multimodal",
+  server_name: "openrouter",
   tool_name: "get_model_info",
   arguments: {
     model: "anthropic/claude-3.5-sonnet"
@@ -193,7 +253,7 @@ Check if a model ID is valid:
 
 ```javascript
 use_mcp_tool({
-  server_name: "openrouter_multimodal",
+  server_name: "openrouter",
   tool_name: "validate_model",
   arguments: {
     model: "google/gemini-2.5-pro-exp-03-25:free"
@@ -210,6 +270,32 @@ The server provides detailed error messages for various failure cases:
 - Rate limiting issues
 - Invalid image formats
 - Authentication problems
+
+## Troubleshooting
+
+### Common Issues
+
+- **"fetch is not defined" error**: This often occurs when the Node.js environment doesn't have global fetch. Use Node.js v18+ or add the PATH environment variable to your configuration as shown below:
+
+```json
+{
+  "mcpServers": {
+    "openrouter": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@stabgan/openrouter-mcp-multimodal"
+      ],
+      "env": {
+        "OPENROUTER_API_KEY": "your-api-key-here",
+        "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      }
+    }
+  }
+}
+```
+
+- **Image analysis failures**: Make sure your image path is absolute and the file format is supported.
 
 ## Development
 
