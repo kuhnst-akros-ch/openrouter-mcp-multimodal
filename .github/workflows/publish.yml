@@ -19,6 +19,17 @@ jobs:
           node-version: '18'
           cache: 'npm'
       
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        id: npm-cache
+        with:
+          path: |
+            **/node_modules
+            ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
+      
       - name: Configure npm
         run: |
           npm config set strict-ssl false
@@ -27,7 +38,16 @@ jobs:
           npm config set fetch-retry-maxtimeout 120000
       
       - name: Install dependencies
+        if: steps.npm-cache.outputs.cache-hit != 'true'
         run: npm cache clean --force && npm install --legacy-peer-deps --no-optional
+      
+      - name: Cache build output
+        uses: actions/cache@v3
+        with:
+          path: dist
+          key: ${{ runner.os }}-build-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-build-
       
       - name: Build TypeScript
         run: npm run build
@@ -53,6 +73,18 @@ jobs:
         with:
           node-version: '18'
           registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+      
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        id: npm-cache
+        with:
+          path: |
+            **/node_modules
+            ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
       
       - name: Configure npm
         run: |
@@ -62,6 +94,7 @@ jobs:
           npm config set fetch-retry-maxtimeout 120000
       
       - name: Install dependencies
+        if: steps.npm-cache.outputs.cache-hit != 'true'
         run: npm cache clean --force && npm install --legacy-peer-deps --no-optional
       
       - name: Download build artifacts
@@ -88,6 +121,14 @@ jobs:
       
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+      
+      - name: Cache Docker layers
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
       
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -124,11 +165,22 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: |
+            type=gha
+            type=local,src=/tmp/.buildx-cache
+          cache-to: |
+            type=gha,mode=max
+            type=local,dest=/tmp/.buildx-cache-new,mode=max
           build-args: |
             NPM_CONFIG_STRICT_SSL=false
             NPM_CONFIG_REGISTRY=https://registry.npmjs.org/
             NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=20000
             NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=120000
-            NODE_ENV=development 
+            NODE_ENV=development
+      
+      # Temp fix for https://github.com/docker/build-push-action/issues/252
+      # https://github.com/moby/buildkit/issues/1896
+      - name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache 
