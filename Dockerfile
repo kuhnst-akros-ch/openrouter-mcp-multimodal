@@ -2,22 +2,26 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Install dependencies for sharp
+# Install dependencies for sharp and network troubleshooting
 RUN apk add --no-cache \
     g++ \
     make \
-    python3
+    python3 \
+    curl \
+    ca-certificates
 
-# Configure npm to handle potential certificate issues
+# Configure npm for better reliability
 RUN npm config set strict-ssl false
 RUN npm config set registry https://registry.npmjs.org/
+RUN npm config set fetch-retry-mintimeout 20000
+RUN npm config set fetch-retry-maxtimeout 120000
 
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies with development environment for building
-ENV NODE_ENV=development
-RUN npm install --no-optional --verbose
+# Clean npm cache and install dependencies
+RUN npm cache clean --force && \
+    npm install --legacy-peer-deps --no-optional
 
 # Copy source code
 COPY . .
