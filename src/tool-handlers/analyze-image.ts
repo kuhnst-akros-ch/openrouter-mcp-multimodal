@@ -1,7 +1,7 @@
 import path from 'path';
 import { promises as fs } from 'fs';
 import sharp from 'sharp';
-import { McpError } from '@modelcontextprotocol/sdk/types.js';
+import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import OpenAI from 'openai';
 
 export interface AnalyzeImageToolRequest {
@@ -21,7 +21,7 @@ export async function handleAnalyzeImage(
     // Validate image path
     const imagePath = args.image_path;
     if (!path.isAbsolute(imagePath)) {
-      throw new McpError('InvalidParams', 'Image path must be absolute');
+      throw new McpError(ErrorCode.InvalidParams, 'Image path must be absolute');
     }
     
     // Read image file
@@ -85,7 +85,7 @@ export async function handleAnalyzeImage(
     // Call OpenRouter API
     const completion = await openai.chat.completions.create({
       model,
-      messages,
+      messages: messages as any,
     });
     
     return {

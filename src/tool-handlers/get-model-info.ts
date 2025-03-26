@@ -1,4 +1,4 @@
-import { McpError } from '@modelcontextprotocol/sdk/types.js';
+import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { ModelCache } from '../model-cache.js';
 
 export interface GetModelInfoToolRequest {
@@ -26,7 +26,7 @@ export async function handleGetModelInfo(
     
     const model = modelCache.getModel(args.model);
     if (!model) {
-      throw new McpError('NotFound', `Model '${args.model}' not found`);
+      throw new McpError(ErrorCode.InvalidParams, `Model '${args.model}' not found`);
     }
     
     return {

@@ -1,5 +1,5 @@
 import axios, { AxiosError, AxiosInstance } from 'axios';
-import { McpError } from '@modelcontextprotocol/sdk/types.js';
+import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 
 /**
  * Client for interacting with the OpenRouter API
@@ -90,7 +90,7 @@ export class OpenRouterAPIClient {
       if (axiosError.response) {
         const responseData = axiosError.response.data as any;
         const message = responseData?.error?.message || axiosError.message;
-        throw new McpError('RequestFailed', `OpenRouter API error: ${message}`);
+        throw new McpError(ErrorCode.InternalError, `OpenRouter API error: ${message}`);
       }
     }
     
@@ -114,17 +114,17 @@ export class OpenRouterAPIClient {
         const message = responseData?.error?.message || axiosError.message;
         
         if (status === 401 || status === 403) {
-          throw new McpError('Unauthorized', `Authentication error: ${message}`);
+          throw new McpError(ErrorCode.InvalidRequest, `Authentication error: ${message}`);
         } else if (status === 429) {
-          throw new McpError('RateLimitExceeded', `Rate limit exceeded: ${message}`);
+          throw new McpError(ErrorCode.InternalError, `Rate limit exceeded: ${message}`);
         } else {
-          throw new McpError('RequestFailed', `OpenRouter API error (${status}): ${message}`);
+          throw new McpError(ErrorCode.InternalError, `OpenRouter API error (${status}): ${message}`);
         }
       } else if (axiosError.request) {
-        throw new McpError('NetworkError', `Network error: ${axiosError.message}`);
+        throw new McpError(ErrorCode.ConnectionClosed, `Network error: ${axiosError.message}`);
       }
     }
     
-    throw new McpError('UnknownError', `Unknown error: ${error.message || 'No error message'}`);
+    throw new McpError(ErrorCode.InternalError, `Unknown error: ${error.message || 'No error message'}`);
   }
 }

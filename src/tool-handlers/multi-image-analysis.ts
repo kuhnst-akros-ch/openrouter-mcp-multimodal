@@ -1,6 +1,6 @@
 import fetch from 'node-fetch';
 import sharp from 'sharp';
-import { McpError } from '@modelcontextprotocol/sdk/types.js';
+import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import OpenAI from 'openai';
 
 export interface MultiImageAnalysisToolRequest {
@@ -90,11 +90,11 @@ export async function handleMultiImageAnalysis(
   try {
     // Validate inputs
     if (!args.images || args.images.length === 0) {
-      throw new McpError('InvalidParams', 'At least one image is required');
+      throw new McpError(ErrorCode.InvalidParams, 'At least one image is required');
     }
     
     if (!args.prompt) {
-      throw new McpError('InvalidParams', 'A prompt is required');
+      throw new McpError(ErrorCode.InvalidParams, 'A prompt is required');
     }
     
     // Prepare content array for the message
@@ -137,7 +137,7 @@ export async function handleMultiImageAnalysis(
       messages: [{
         role: 'user',
         content
-      }]
+      }] as any
     });
     
     return {
