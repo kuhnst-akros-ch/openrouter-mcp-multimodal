@@ -8,9 +8,13 @@ RUN apk add --no-cache \
     make \
     python3
 
+# Configure npm to handle potential certificate issues
+RUN npm config set strict-ssl false
+RUN npm config set registry https://registry.npmjs.org/
+
 # Copy package files and install dependencies
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 
 # Copy source code
 COPY . .
