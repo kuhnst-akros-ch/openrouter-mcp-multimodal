@@ -4,17 +4,17 @@ import { OpenRouterAPIClient } from '../openrouter-api.js';
 export interface SearchModelsToolRequest {
   query?: string;
   provider?: string;
-  minContextLength?: number;
-  maxContextLength?: number;
-  maxPromptPrice?: number;
-  maxCompletionPrice?: number;
+  minContextLength?: number | string;
+  maxContextLength?: number | string;
+  maxPromptPrice?: number | string;
+  maxCompletionPrice?: number | string;
   capabilities?: {
     functions?: boolean;
     tools?: boolean;
     vision?: boolean;
     json_mode?: boolean;
   };
-  limit?: number;
+  limit?: number | string;
 }
 
 export async function handleSearchModels(

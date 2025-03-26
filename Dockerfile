@@ -17,7 +17,7 @@ COPY package*.json ./
 
 # Install dependencies with development environment for building
 ENV NODE_ENV=development
-RUN npm install --no-optional
+RUN npm install --no-optional --verbose
 
 # Copy source code
 COPY . .

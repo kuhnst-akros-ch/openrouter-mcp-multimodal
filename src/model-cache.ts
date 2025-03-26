@@ -71,17 +71,17 @@ export class ModelCache {
   public searchModels(params: {
     query?: string;
     provider?: string;
-    minContextLength?: number;
-    maxContextLength?: number;
-    maxPromptPrice?: number;
-    maxCompletionPrice?: number;
+    minContextLength?: number | string;
+    maxContextLength?: number | string;
+    maxPromptPrice?: number | string;
+    maxCompletionPrice?: number | string;
     capabilities?: {
       functions?: boolean;
       tools?: boolean;
       vision?: boolean;
       json_mode?: boolean;
     };
-    limit?: number;
+    limit?: number | string;
   }): any[] {
     let results = this.getAllModels();
 
@@ -103,32 +103,52 @@ export class ModelCache {
     }
 
     // Filter by context length
-    if (params.minContextLength) {
-      results = results.filter(
-        (model) => model.context_length >= params.minContextLength
-      );
+    if (params.minContextLength !== undefined) {
+      const minContextLength = typeof params.minContextLength === 'string' 
+        ? parseInt(params.minContextLength, 10) 
+        : params.minContextLength;
+      if (!isNaN(minContextLength)) {
+        results = results.filter(
+          (model) => model.context_length >= minContextLength
+        );
+      }
     }
 
-    if (params.maxContextLength) {
-      results = results.filter(
-        (model) => model.context_length <= params.maxContextLength
-      );
+    if (params.maxContextLength !== undefined) {
+      const maxContextLength = typeof params.maxContextLength === 'string' 
+        ? parseInt(params.maxContextLength, 10) 
+        : params.maxContextLength;
+      if (!isNaN(maxContextLength)) {
+        results = results.filter(
+          (model) => model.context_length <= maxContextLength
+        );
+      }
     }
 
     // Filter by price
-    if (params.maxPromptPrice) {
-      results = results.filter(
-        (model) =>
-          !model.pricing?.prompt || model.pricing.prompt <= params.maxPromptPrice
-      );
+    if (params.maxPromptPrice !== undefined) {
+      const maxPromptPrice = typeof params.maxPromptPrice === 'string' 
+        ? parseFloat(params.maxPromptPrice) 
+        : params.maxPromptPrice;
+      if (!isNaN(maxPromptPrice)) {
+        results = results.filter(
+          (model) =>
+            !model.pricing?.prompt || model.pricing.prompt <= maxPromptPrice
+        );
+      }
     }
 
-    if (params.maxCompletionPrice) {
-      results = results.filter(
-        (model) =>
-          !model.pricing?.completion ||
-          model.pricing.completion <= params.maxCompletionPrice
-      );
+    if (params.maxCompletionPrice !== undefined) {
+      const maxCompletionPrice = typeof params.maxCompletionPrice === 'string' 
+        ? parseFloat(params.maxCompletionPrice) 
+        : params.maxCompletionPrice;
+      if (!isNaN(maxCompletionPrice)) {
+        results = results.filter(
+          (model) =>
+            !model.pricing?.completion ||
+            model.pricing.completion <= maxCompletionPrice
+        );
+      }
     }
 
     // Filter by capabilities
@@ -150,8 +170,13 @@ export class ModelCache {
     }
 
     // Apply limit
-    if (params.limit && params.limit > 0) {
-      results = results.slice(0, params.limit);
+    if (params.limit !== undefined) {
+      const limit = typeof params.limit === 'string' 
+        ? parseInt(params.limit, 10) 
+        : params.limit;
+      if (!isNaN(limit) && limit > 0) {
+        results = results.slice(0, limit);
+      }
     }
 
     return results;
