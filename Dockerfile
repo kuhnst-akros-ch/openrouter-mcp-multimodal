@@ -12,9 +12,12 @@ RUN apk add --no-cache \
 RUN npm config set strict-ssl false
 RUN npm config set registry https://registry.npmjs.org/
 
-# Copy package files and install dependencies
+# Copy package files
 COPY package*.json ./
-RUN npm ci
+
+# Install dependencies with development environment for building
+ENV NODE_ENV=development
+RUN npm ci --no-optional --unsafe-perm 
 
 # Copy source code
 COPY . .
@@ -22,7 +25,7 @@ COPY . .
 # Build TypeScript code
 RUN npm run build
 
-# Default environment variables
+# Switch to production for runtime
 ENV NODE_ENV=production
 
 # The API key should be passed at runtime
