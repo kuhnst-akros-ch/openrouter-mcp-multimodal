@@ -11,16 +11,23 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '18'
           cache: 'npm'
       
+      - name: Configure npm
+        run: |
+          npm config set strict-ssl false
+          npm config set registry https://registry.npmjs.org/
+          npm config set fetch-retry-mintimeout 20000
+          npm config set fetch-retry-maxtimeout 120000
+      
       - name: Install dependencies
-        run: npm ci
+        run: npm cache clean --force && npm install --legacy-peer-deps --no-optional
       
       - name: Build TypeScript
         run: npm run build
@@ -39,16 +46,23 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '18'
           registry-url: 'https://registry.npmjs.org'
       
+      - name: Configure npm
+        run: |
+          npm config set strict-ssl false
+          npm config set registry https://registry.npmjs.org/
+          npm config set fetch-retry-mintimeout 20000
+          npm config set fetch-retry-maxtimeout 120000
+      
       - name: Install dependencies
-        run: npm ci
+        run: npm cache clean --force && npm install --legacy-peer-deps --no-optional
       
       - name: Download build artifacts
         uses: actions/download-artifact@v3
@@ -57,44 +71,64 @@ jobs:
           path: dist/
       
       - name: Publish to npm
-        run: npm publish
+        run: npm publish --access=public
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPMJS_TOKEN }}
 
   docker:
     needs: build
     runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
       
       - name: Login to Docker Hub
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
       - name: Extract metadata for Docker
         id: meta
-        uses: docker/metadata-action@v4
+        uses: docker/metadata-action@v5
         with:
-          images: stabgandocker/openrouter-mcp-multimodal
+          images: |
+            stabgandocker/openrouter-mcp-multimodal
+            ghcr.io/stabgan/openrouter-mcp-multimodal
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=semver,pattern={{version}},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
             type=semver,pattern={{major}}.{{minor}},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
             type=semver,pattern={{major}},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=sha,format=short
             type=ref,event=branch
       
       - name: Build and push Docker image
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v5
         with:
           context: .
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max 
+          cache-to: type=gha,mode=max
+          build-args: |
+            NPM_CONFIG_STRICT_SSL=false
+            NPM_CONFIG_REGISTRY=https://registry.npmjs.org/
+            NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=20000
+            NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=120000
+            NODE_ENV=development 
