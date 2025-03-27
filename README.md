@@ -68,7 +68,7 @@ Add one of the following configurations to your MCP settings file (e.g., `cline_
       ],
       "env": {
         "OPENROUTER_API_KEY": "your-api-key-here",
-        "OPENROUTER_DEFAULT_MODEL": "anthropic/claude-3.5-sonnet"
+        "DEFAULT_MODEL": "qwen/qwen2.5-vl-32b-instruct:free"
       }
     }
   }
@@ -89,7 +89,7 @@ Add one of the following configurations to your MCP settings file (e.g., `cline_
       ],
       "env": {
         "OPENROUTER_API_KEY": "your-api-key-here",
-        "OPENROUTER_DEFAULT_MODEL": "anthropic/claude-3.5-sonnet"
+        "DEFAULT_MODEL": "qwen/qwen2.5-vl-32b-instruct:free"
       }
     }
   }
@@ -108,7 +108,7 @@ Add one of the following configurations to your MCP settings file (e.g., `cline_
         "--rm",
         "-i",
         "-e", "OPENROUTER_API_KEY=your-api-key-here",
-        "-e", "OPENROUTER_DEFAULT_MODEL=anthropic/claude-3.5-sonnet",
+        "-e", "DEFAULT_MODEL=qwen/qwen2.5-vl-32b-instruct:free",
         "stabgandocker/openrouter-mcp-multimodal:latest"
       ]
     }
@@ -129,23 +129,45 @@ Add one of the following configurations to your MCP settings file (e.g., `cline_
       ],
       "env": {
         "OPENROUTER_API_KEY": "your-api-key-here",
-        "OPENROUTER_DEFAULT_MODEL": "anthropic/claude-3.5-sonnet"
+        "DEFAULT_MODEL": "qwen/qwen2.5-vl-32b-instruct:free"
       }
     }
   }
 }
 ```
 
+## Examples
+
+For comprehensive examples of how to use this MCP server, check out the [examples directory](./examples/). We provide:
+
+- JavaScript examples for Node.js applications
+- Python examples with interactive chat capabilities
+- Code snippets for integrating with various applications
+
+Each example comes with clear documentation and step-by-step instructions.
+
+## Dependencies
+
+This project uses the following key dependencies:
+
+- `@modelcontextprotocol/sdk`: ^1.8.0 - Latest MCP SDK for tool implementation
+- `openai`: ^4.89.1 - OpenAI-compatible API client for OpenRouter
+- `sharp`: ^0.33.5 - Fast image processing library
+- `axios`: ^1.8.4 - HTTP client for API requests
+- `node-fetch`: ^3.3.2 - Modern fetch implementation
+
+Node.js 18 or later is required. All dependencies are regularly updated to ensure compatibility and security.
+
 ## Available Tools
 
-### chat_completion
+### mcp_openrouter_chat_completion
 
 Send text or multimodal messages to OpenRouter models:
 
 ```javascript
 use_mcp_tool({
   server_name: "openrouter",
-  tool_name: "chat_completion",
+  tool_name: "mcp_openrouter_chat_completion",
   arguments: {
     model: "google/gemini-2.5-pro-exp-03-25:free", // Optional if default is set
     messages: [
@@ -168,7 +190,7 @@ For multimodal messages with images:
 ```javascript
 use_mcp_tool({
   server_name: "openrouter",
-  tool_name: "chat_completion",
+  tool_name: "mcp_openrouter_chat_completion",
   arguments: {
     model: "anthropic/claude-3.5-sonnet",
     messages: [
@@ -191,132 +213,3 @@ use_mcp_tool({
   }
 });
 ```
-
-### multi_image_analysis
-
-Analyze multiple images with a single prompt:
-
-```javascript
-use_mcp_tool({
-  server_name: "openrouter",
-  tool_name: "multi_image_analysis",
-  arguments: {
-    images: [
-      { url: "https://example.com/image1.jpg" },
-      { url: "file:///absolute/path/to/image2.jpg" },
-      { 
-        url: "https://example.com/image3.jpg",
-        alt: "Optional description of image 3" 
-      }
-    ],
-    prompt: "Compare these images and tell me their similarities and differences",
-    markdown_response: true, // Optional, defaults to true
-    model: "anthropic/claude-3-opus" // Optional if default is set
-  }
-});
-```
-
-### search_models
-
-Search and filter available models:
-
-```javascript
-use_mcp_tool({
-  server_name: "openrouter",
-  tool_name: "search_models",
-  arguments: {
-    query: "claude", // Optional text search
-    provider: "anthropic", // Optional provider filter
-    capabilities: {
-      vision: true // Filter for models with vision capabilities
-    },
-    limit: 5 // Optional, defaults to 10
-  }
-});
-```
-
-### get_model_info
-
-Get detailed information about a specific model:
-
-```javascript
-use_mcp_tool({
-  server_name: "openrouter",
-  tool_name: "get_model_info",
-  arguments: {
-    model: "anthropic/claude-3.5-sonnet"
-  }
-});
-```
-
-### validate_model
-
-Check if a model ID is valid:
-
-```javascript
-use_mcp_tool({
-  server_name: "openrouter",
-  tool_name: "validate_model",
-  arguments: {
-    model: "google/gemini-2.5-pro-exp-03-25:free"
-  }
-});
-```
-
-## Error Handling
-
-The server provides detailed error messages for various failure cases:
-
-- Invalid input parameters
-- Network errors
-- Rate limiting issues
-- Invalid image formats
-- Authentication problems
-
-## Troubleshooting
-
-### Common Issues
-
-- **"fetch is not defined" error**: This often occurs when the Node.js environment doesn't have global fetch. Use Node.js v18+ or add the PATH environment variable to your configuration as shown below:
-
-```json
-{
-  "mcpServers": {
-    "openrouter": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@stabgan/openrouter-mcp-multimodal"
-      ],
-      "env": {
-        "OPENROUTER_API_KEY": "your-api-key-here",
-        "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-      }
-    }
-  }
-}
-```
-
-- **Image analysis failures**: Make sure your image path is absolute and the file format is supported.
-
-## Development
-
-To build from source:
-
-```bash
-git clone https://github.com/stabgan/openrouter-mcp-multimodal.git
-cd openrouter-mcp-multimodal
-npm install
-npm run build
-```
-
-## License
-
-MIT License
-
-## Version 1.2.0 Updates
-- Simplified image analysis by consolidating all functionality into the `multi_image_analysis` tool
-- Added automatic selection of free models with the largest context window when no model is specified
-- Improved handling of various image formats (file://, http://, data:)
-- Enhanced error handling and logging for better troubleshooting
-- Removed the `analyze_image` tool to eliminate confusion and streamline the interface

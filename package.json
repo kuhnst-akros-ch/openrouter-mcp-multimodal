@@ -1,6 +1,6 @@
 {
   "name": "@stabgan/openrouter-mcp-multimodal",
-  "version": "1.2.1",
+  "version": "1.2.0",
   "description": "MCP server for OpenRouter providing text chat and image analysis tools",
   "type": "module",
   "main": "dist/index.js",
@@ -16,7 +16,9 @@
     "build": "tsc && shx chmod +x dist/*.js",
     "prepare": "npm run build",
     "start": "node dist/index.js",
-    "watch": "tsc --watch"
+    "watch": "tsc --watch",
+    "examples": "node examples/index.js",
+    "audit": "npm audit fix"
   },
   "keywords": [
     "mcp",
@@ -41,18 +43,18 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.4.1",
+    "@modelcontextprotocol/sdk": "^1.8.0",
     "axios": "^1.8.4",
     "dotenv": "^16.4.7",
     "node-fetch": "^3.3.2",
     "openai": "^4.89.1",
-    "sharp": "^0.33.3"
+    "sharp": "^0.33.5"
   },
   "devDependencies": {
-    "@types/node": "^22.13.1",
+    "@types/node": "^22.13.14",
     "@types/sharp": "^0.32.0",
     "shx": "^0.3.4",
-    "typescript": "^5.7.3"
+    "typescript": "^5.8.2"
   },
   "overrides": {
     "uri-js": "npm:uri-js-replace",
