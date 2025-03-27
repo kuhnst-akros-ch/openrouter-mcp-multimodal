@@ -8,8 +8,33 @@ image:
 
 entrypoint: ["node", "dist/index.js"]
 
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    properties:
+      OPENROUTER_API_KEY:
+        type: string
+        description: OpenRouter API key for authentication
+      OPENROUTER_DEFAULT_MODEL:
+        type: string
+        description: Default model to use if none specified in requests
+    required: ["OPENROUTER_API_KEY"]
+  commandFunction: |
+    function getCommand(config) {
+      return {
+        command: "node",
+        args: ["dist/index.js"],
+        env: {
+          OPENROUTER_API_KEY: config.OPENROUTER_API_KEY,
+          OPENROUTER_DEFAULT_MODEL: config.OPENROUTER_DEFAULT_MODEL || "anthropic/claude-3.5-sonnet"
+        }
+      };
+    }
+
 build:
   dockerfile: Dockerfile
+  dockerBuildPath: "."
 
 publish:
   smithery: true
