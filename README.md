@@ -192,22 +192,6 @@ use_mcp_tool({
 });
 ```
 
-### analyze_image
-
-Analyze a single image with an optional question:
-
-```javascript
-use_mcp_tool({
-  server_name: "openrouter",
-  tool_name: "analyze_image",
-  arguments: {
-    image_path: "/absolute/path/to/image.jpg",
-    question: "What objects are in this image?", // Optional
-    model: "anthropic/claude-3.5-sonnet" // Optional if default is set
-  }
-});
-```
-
 ### multi_image_analysis
 
 Analyze multiple images with a single prompt:
@@ -329,3 +313,10 @@ npm run build
 ## License
 
 MIT License
+
+## Version 1.2.0 Updates
+- Simplified image analysis by consolidating all functionality into the `multi_image_analysis` tool
+- Added automatic selection of free models with the largest context window when no model is specified
+- Improved handling of various image formats (file://, http://, data:)
+- Enhanced error handling and logging for better troubleshooting
+- Removed the `analyze_image` tool to eliminate confusion and streamline the interface

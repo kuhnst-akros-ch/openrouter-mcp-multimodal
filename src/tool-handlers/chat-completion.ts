@@ -66,6 +66,53 @@ function truncateMessagesToFit(
   return truncated;
 }
 
+// Find a suitable free model with the largest context window
+async function findSuitableFreeModel(openai: OpenAI): Promise<string> {
+  try {
+    // Query available models with 'free' in their name
+    const modelsResponse = await openai.models.list();
+    if (!modelsResponse || !modelsResponse.data || modelsResponse.data.length === 0) {
+      return 'deepseek/deepseek-chat-v3-0324:free'; // Fallback to a known model
+    }
+    
+    // Filter models with 'free' in ID
+    const freeModels = modelsResponse.data
+      .filter(model => model.id.includes('free'))
+      .map(model => {
+        // Try to extract context length from the model object
+        let contextLength = 0;
+        try {
+          const modelAny = model as any; // Cast to any to access non-standard properties
+          if (typeof modelAny.context_length === 'number') {
+            contextLength = modelAny.context_length;
+          } else if (modelAny.context_window) {
+            contextLength = parseInt(modelAny.context_window, 10);
+          }
+        } catch (e) {
+          console.error(`Error parsing context length for model ${model.id}:`, e);
+        }
+        
+        return {
+          id: model.id,
+          contextLength: contextLength || 0
+        };
+      });
+    
+    if (freeModels.length === 0) {
+      return 'deepseek/deepseek-chat-v3-0324:free'; // Fallback if no free models found
+    }
+    
+    // Sort by context length and pick the one with the largest context window
+    freeModels.sort((a, b) => b.contextLength - a.contextLength);
+    console.error(`Selected free model: ${freeModels[0].id} with context length: ${freeModels[0].contextLength}`);
+    
+    return freeModels[0].id;
+  } catch (error) {
+    console.error('Error finding suitable free model:', error);
+    return 'deepseek/deepseek-chat-v3-0324:free'; // Fallback to a known model
+  }
+}
+
 export async function handleChatCompletion(
   request: { params: { arguments: ChatCompletionToolRequest } },
   openai: OpenAI,
@@ -73,20 +120,6 @@ export async function handleChatCompletion(
 ) {
   const args = request.params.arguments;
   
-  // Validate model selection
-  const model = args.model || defaultModel;
-  if (!model) {
-    return {
-      content: [
-        {
-          type: 'text',
-          text: 'No model specified and no default model configured in MCP settings. Please specify a model or set OPENROUTER_DEFAULT_MODEL in the MCP configuration.',
-        },
-      ],
-      isError: true,
-    };
-  }
-
   // Validate message array
   if (args.messages.length === 0) {
     return {
@@ -101,8 +134,21 @@ export async function handleChatCompletion(
   }
 
   try {
+    // Select model with priority:
+    // 1. User-specified model
+    // 2. Default model from environment
+    // 3. Free model with the largest context window (selected automatically)
+    let model = args.model || defaultModel;
+    
+    if (!model) {
+      model = await findSuitableFreeModel(openai);
+      console.error(`Using auto-selected model: ${model}`);
+    }
+    
     // Truncate messages to fit within context window
     const truncatedMessages = truncateMessagesToFit(args.messages, MAX_CONTEXT_TOKENS);
+    
+    console.error(`Making API call with model: ${model}`);
 
     const completion = await openai.chat.completions.create({
       model,

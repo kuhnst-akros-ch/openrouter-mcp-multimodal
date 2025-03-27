@@ -15,7 +15,6 @@ import { handleChatCompletion, ChatCompletionToolRequest } from './tool-handlers
 import { handleSearchModels, SearchModelsToolRequest } from './tool-handlers/search-models.js';
 import { handleGetModelInfo, GetModelInfoToolRequest } from './tool-handlers/get-model-info.js';
 import { handleValidateModel, ValidateModelToolRequest } from './tool-handlers/validate-model.js';
-import { handleAnalyzeImage, AnalyzeImageToolRequest } from './tool-handlers/analyze-image.js';
 import { handleMultiImageAnalysis, MultiImageAnalysisToolRequest } from './tool-handlers/multi-image-analysis.js';
 
 export class ToolHandlers {
@@ -128,41 +127,10 @@ export class ToolHandlers {
           maxContextTokens: 200000
         },
         
-        // Image Analysis Tool
-        {
-          name: 'analyze_image',
-          description: 'Analyze an image using OpenRouter vision models',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              image_path: {
-                type: 'string',
-                description: 'Path to the image file to analyze (must be an absolute path)',
-              },
-              image_url: {
-                type: 'string',
-                description: 'URL or data URL of the image (can be a file:// URL, http(s):// URL, or data: URI)',
-              },
-              question: {
-                type: 'string',
-                description: 'Question to ask about the image',
-              },
-              model: {
-                type: 'string',
-                description: 'OpenRouter model to use (e.g., "anthropic/claude-3.5-sonnet")',
-              },
-            },
-            oneOf: [
-              { required: ['image_path'] },
-              { required: ['image_url'] }
-            ]
-          },
-        },
-        
         // Multi-Image Analysis Tool
         {
           name: 'multi_image_analysis',
-          description: 'Analyze multiple images at once with a single prompt and receive detailed responses',
+          description: 'Analyze one or more images with a prompt and receive detailed responses',
           inputSchema: {
             type: 'object',
             properties: {
@@ -174,7 +142,7 @@ export class ToolHandlers {
                   properties: {
                     url: {
                       type: 'string',
-                      description: 'URL or data URL of the image (can be a file:// URL to read from local filesystem)',
+                      description: 'URL or data URL of the image (use file:// URL prefix for local files, http(s):// for web images, or data: for base64 encoded images)',
                     },
                     alt: {
                       type: 'string',
@@ -195,7 +163,7 @@ export class ToolHandlers {
               },
               model: {
                 type: 'string',
-                description: 'OpenRouter model to use (defaults to claude-3.5-sonnet if not specified)',
+                description: 'OpenRouter model to use. If not specified, the system will use a free model with vision capabilities or the default model.',
               },
             },
             required: ['images', 'prompt'],
@@ -305,13 +273,6 @@ export class ToolHandlers {
           return handleChatCompletion({
             params: {
               arguments: request.params.arguments as unknown as ChatCompletionToolRequest
-            }
-          }, this.openai, this.defaultModel);
-        
-        case 'analyze_image':
-          return handleAnalyzeImage({
-            params: {
-              arguments: request.params.arguments as unknown as AnalyzeImageToolRequest
             }
           }, this.openai, this.defaultModel);
         

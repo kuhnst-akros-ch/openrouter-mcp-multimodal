@@ -80,6 +80,53 @@ async function processImage(buffer: Buffer): Promise<string> {
   }
 }
 
+// Find a suitable free model with vision capabilities
+async function findSuitableFreeModel(openai: OpenAI): Promise<string> {
+  try {
+    // Query available models with 'free' in their name
+    const modelsResponse = await openai.models.list();
+    if (!modelsResponse || !modelsResponse.data || modelsResponse.data.length === 0) {
+      return 'qwen/qwen2.5-vl-32b-instruct:free'; // Fallback to a known model
+    }
+    
+    // Filter models with 'free' in ID and multimodal capabilities
+    const freeModels = modelsResponse.data
+      .filter(model => model.id.includes('free'))
+      .map(model => {
+        // Try to extract context length from the model object
+        let contextLength = 0;
+        try {
+          const modelAny = model as any; // Cast to any to access non-standard properties
+          if (typeof modelAny.context_length === 'number') {
+            contextLength = modelAny.context_length;
+          } else if (modelAny.context_window) {
+            contextLength = parseInt(modelAny.context_window, 10);
+          }
+        } catch (e) {
+          console.error(`Error parsing context length for model ${model.id}:`, e);
+        }
+        
+        return {
+          id: model.id,
+          contextLength: contextLength || 0
+        };
+      });
+    
+    if (freeModels.length === 0) {
+      return 'qwen/qwen2.5-vl-32b-instruct:free'; // Fallback if no free models found
+    }
+    
+    // Sort by context length and pick the one with the largest context window
+    freeModels.sort((a, b) => b.contextLength - a.contextLength);
+    console.error(`Selected free model: ${freeModels[0].id} with context length: ${freeModels[0].contextLength}`);
+    
+    return freeModels[0].id;
+  } catch (error) {
+    console.error('Error finding suitable free model:', error);
+    return 'qwen/qwen2.5-vl-32b-instruct:free'; // Fallback to a known model
+  }
+}
+
 export async function handleMultiImageAnalysis(
   request: { params: { arguments: MultiImageAnalysisToolRequest } },
   openai: OpenAI,
@@ -128,8 +175,18 @@ export async function handleMultiImageAnalysis(
       throw new Error('Failed to process any of the provided images');
     }
     
-    // Select model
-    const model = args.model || defaultModel || 'anthropic/claude-3.5-sonnet';
+    // Select model with priority:
+    // 1. User-specified model
+    // 2. Default model from environment
+    // 3. Free model with vision capabilities (selected automatically)
+    let model = args.model || defaultModel;
+    
+    if (!model) {
+      model = await findSuitableFreeModel(openai);
+      console.error(`Using auto-selected model: ${model}`);
+    }
+    
+    console.error(`Making API call with model: ${model}`);
     
     // Make the API call
     const completion = await openai.chat.completions.create({
