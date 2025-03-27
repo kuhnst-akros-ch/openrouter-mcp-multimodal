@@ -16,6 +16,7 @@ import { handleSearchModels, SearchModelsToolRequest } from './tool-handlers/sea
 import { handleGetModelInfo, GetModelInfoToolRequest } from './tool-handlers/get-model-info.js';
 import { handleValidateModel, ValidateModelToolRequest } from './tool-handlers/validate-model.js';
 import { handleMultiImageAnalysis, MultiImageAnalysisToolRequest } from './tool-handlers/multi-image-analysis.js';
+import { handleAnalyzeImage, AnalyzeImageToolRequest } from './tool-handlers/analyze-image.js';
 
 export class ToolHandlers {
   private server: Server;
@@ -51,7 +52,7 @@ export class ToolHandlers {
       tools: [
         // Chat Completion Tool
         {
-          name: 'chat_completion',
+          name: 'mcp_openrouter_chat_completion',
           description: 'Send a message to OpenRouter.ai and get a response',
           inputSchema: {
             type: 'object',
@@ -127,10 +128,34 @@ export class ToolHandlers {
           maxContextTokens: 200000
         },
         
+        // Single Image Analysis Tool
+        {
+          name: 'mcp_openrouter_analyze_image',
+          description: 'Analyze an image using OpenRouter vision models',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              image_path: {
+                type: 'string',
+                description: 'Path to the image file to analyze (must be an absolute path)',
+              },
+              question: {
+                type: 'string',
+                description: 'Question to ask about the image',
+              },
+              model: {
+                type: 'string',
+                description: 'OpenRouter model to use (e.g., "anthropic/claude-3.5-sonnet")',
+              },
+            },
+            required: ['image_path'],
+          },
+        },
+        
         // Multi-Image Analysis Tool
         {
-          name: 'multi_image_analysis',
-          description: 'Analyze one or more images with a prompt and receive detailed responses',
+          name: 'mcp_openrouter_multi_image_analysis',
+          description: 'Analyze multiple images at once with a single prompt and receive detailed responses',
           inputSchema: {
             type: 'object',
             properties: {
@@ -269,14 +294,21 @@ export class ToolHandlers {
 
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
       switch (request.params.name) {
-        case 'chat_completion':
+        case 'mcp_openrouter_chat_completion':
           return handleChatCompletion({
             params: {
               arguments: request.params.arguments as unknown as ChatCompletionToolRequest
             }
           }, this.openai, this.defaultModel);
         
-        case 'multi_image_analysis':
+        case 'mcp_openrouter_analyze_image':
+          return handleAnalyzeImage({
+            params: {
+              arguments: request.params.arguments as unknown as AnalyzeImageToolRequest
+            }
+          }, this.openai, this.defaultModel);
+          
+        case 'mcp_openrouter_multi_image_analysis':
           return handleMultiImageAnalysis({
             params: {
               arguments: request.params.arguments as unknown as MultiImageAnalysisToolRequest

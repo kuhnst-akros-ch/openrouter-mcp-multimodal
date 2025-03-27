@@ -5,14 +5,17 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 
 import { ToolHandlers } from './tool-handlers.js';
 
+// Define the default model to use when none is specified
+const DEFAULT_MODEL = 'qwen/qwen2.5-vl-32b-instruct:free';
+
 class OpenRouterMultimodalServer {
   private server: Server;
   private toolHandlers!: ToolHandlers; // Using definite assignment assertion
 
   constructor() {
-    // Get API key and default model from environment variables
+    // Retrieve API key and default model from environment variables
     const apiKey = process.env.OPENROUTER_API_KEY;
-    const defaultModel = process.env.OPENROUTER_DEFAULT_MODEL;
+    const defaultModel = process.env.DEFAULT_MODEL || DEFAULT_MODEL;
 
     // Check if API key is provided
     if (!apiKey) {
@@ -55,11 +58,10 @@ class OpenRouterMultimodalServer {
     console.error('Using API key from environment variable');
     console.error('Note: To use OpenRouter Multimodal, add the API key to your environment variables:');
     console.error('      OPENROUTER_API_KEY=your-api-key');
-    if (process.env.OPENROUTER_DEFAULT_MODEL) {
-      console.error(`      Using default model: ${process.env.OPENROUTER_DEFAULT_MODEL}`);
-    } else {
-      console.error('      No default model set. You will need to specify a model in each request.');
-    }
+    
+    const modelDisplay = process.env.OPENROUTER_DEFAULT_MODEL || DEFAULT_MODEL;
+    console.error(`      Using default model: ${modelDisplay}`);
+    console.error('Server is ready to process tool calls. Waiting for input...');
   }
 }
 
