@@ -139,6 +139,10 @@ export class ToolHandlers {
                 type: 'string',
                 description: 'Path to the image file to analyze (must be an absolute path)',
               },
+              image_url: {
+                type: 'string',
+                description: 'URL or data URL of the image (can be a file:// URL, http(s):// URL, or data: URI)',
+              },
               question: {
                 type: 'string',
                 description: 'Question to ask about the image',
@@ -148,7 +152,10 @@ export class ToolHandlers {
                 description: 'OpenRouter model to use (e.g., "anthropic/claude-3.5-sonnet")',
               },
             },
-            required: ['image_path'],
+            oneOf: [
+              { required: ['image_path'] },
+              { required: ['image_url'] }
+            ]
           },
         },
         
