@@ -33,6 +33,28 @@ export interface AnalyzeImageToolRequest {
   model?: string;
 }
 
+/**
+ * Normalizes a file path to be OS-neutral
+ * Handles Windows backslashes, drive letters, etc.
+ */
+function normalizePath(filePath: string): string {
+  // Skip normalization for URLs and data URLs
+  if (filePath.startsWith('http://') || 
+      filePath.startsWith('https://') || 
+      filePath.startsWith('data:')) {
+    return filePath;
+  }
+  
+  // Handle Windows paths and convert them to a format that's usable
+  // First normalize the path according to the OS
+  let normalized = path.normalize(filePath);
+  
+  // Make sure any Windows backslashes are handled
+  normalized = normalized.replace(/\\/g, '/');
+  
+  return normalized;
+}
+
 async function fetchImageAsBuffer(url: string): Promise<Buffer> {
   try {
     // Handle data URLs
@@ -44,15 +66,18 @@ async function fetchImageAsBuffer(url: string): Promise<Buffer> {
       return Buffer.from(matches[2], 'base64');
     }
     
+    // Normalize the path before proceeding
+    const normalizedUrl = normalizePath(url);
+    
     // Handle file URLs
-    if (url.startsWith('file://')) {
-      const filePath = url.replace('file://', '');
+    if (normalizedUrl.startsWith('file://')) {
+      const filePath = normalizedUrl.replace('file://', '');
       return await fs.readFile(filePath);
     }
     
     // Handle http/https URLs
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      const response = await fetch(url);
+    if (normalizedUrl.startsWith('http://') || normalizedUrl.startsWith('https://')) {
+      const response = await fetch(normalizedUrl);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -60,7 +85,20 @@ async function fetchImageAsBuffer(url: string): Promise<Buffer> {
     }
     
     // Handle regular file paths
-    return await fs.readFile(url);
+    try {
+      return await fs.readFile(normalizedUrl);
+    } catch (error: any) {
+      // Try the original path as a fallback
+      if (normalizedUrl !== url) {
+        try {
+          return await fs.readFile(url);
+        } catch (secondError) {
+          console.error(`Failed to read file with normalized path (${normalizedUrl}) and original path (${url})`);
+          throw error; // Throw the original error
+        }
+      }
+      throw error;
+    }
   } catch (error) {
     console.error(`Error fetching image from ${url}:`, error);
     throw error;
@@ -142,10 +180,13 @@ async function prepareImage(imagePath: string): Promise<{ base64: string; mimeTy
       return { base64: matches[2], mimeType: matches[1] };
     }
     
+    // Normalize the path first
+    const normalizedPath = normalizePath(imagePath);
+    
     // Check if image is a URL
-    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+    if (normalizedPath.startsWith('http://') || normalizedPath.startsWith('https://')) {
       try {
-        const buffer = await fetchImageAsBuffer(imagePath);
+        const buffer = await fetchImageAsBuffer(normalizedPath);
         const processed = await processImage(buffer);
         return { base64: processed, mimeType: 'image/jpeg' }; // We convert everything to JPEG
       } catch (error: any) {
@@ -154,22 +195,50 @@ async function prepareImage(imagePath: string): Promise<{ base64: string; mimeTy
     }
     
     // Handle file paths
-    let absolutePath = imagePath;
+    let absolutePath = normalizedPath;
     
-    // Ensure the image path is absolute if it's a file path
-    if (!imagePath.startsWith('data:') && !path.isAbsolute(imagePath)) {
-      throw new McpError(ErrorCode.InvalidParams, 'Image path must be absolute');
+    // For local file paths, ensure they are absolute 
+    // Don't check URLs or data URIs
+    if (!normalizedPath.startsWith('data:') && 
+        !normalizedPath.startsWith('http://') && 
+        !normalizedPath.startsWith('https://')) {
+      
+      if (!path.isAbsolute(normalizedPath)) {
+        throw new McpError(ErrorCode.InvalidParams, 'Image path must be absolute');
+      }
+      
+      // For Windows paths that include a drive letter but aren't recognized as absolute
+      // by path.isAbsolute in some environments
+      if (/^[A-Za-z]:/.test(normalizedPath) && !path.isAbsolute(normalizedPath)) {
+        absolutePath = path.resolve(normalizedPath);
+      }
     }
 
     try {
       // Check if the file exists
       await fs.access(absolutePath);
     } catch (error) {
-      throw new McpError(ErrorCode.InvalidParams, `File not found: ${absolutePath}`);
+      // Try the original path as a fallback
+      try {
+        await fs.access(imagePath);
+        absolutePath = imagePath; // Use the original path if that works
+      } catch (secondError) {
+        throw new McpError(ErrorCode.InvalidParams, `File not found: ${absolutePath}`);
+      }
     }
 
     // Read the file as a buffer
-    const buffer = await fs.readFile(absolutePath);
+    let buffer;
+    try {
+      buffer = await fs.readFile(absolutePath);
+    } catch (error) {
+      // Try the original path as a fallback
+      try {
+        buffer = await fs.readFile(imagePath);
+      } catch (secondError) {
+        throw new McpError(ErrorCode.InvalidParams, `Failed to read file: ${absolutePath}`);
+      }
+    }
     
     // Determine MIME type from file extension
     const extension = path.extname(absolutePath).toLowerCase();

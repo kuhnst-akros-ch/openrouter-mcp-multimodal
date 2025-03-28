@@ -30,6 +30,28 @@ An MCP (Model Context Protocol) server that provides chat and image analysis cap
   - Exponential backoff for retries
   - Automatic rate limit handling
 
+## What's New in 1.5.0
+
+- **Improved OS Compatibility:**
+  - Enhanced path handling for Windows, macOS, and Linux
+  - Better support for Windows-style paths with drive letters
+  - Normalized path processing for consistent behavior across platforms
+
+- **MCP Configuration Support:**
+  - Cursor MCP integration without requiring environment variables
+  - Direct configuration via MCP parameters
+  - Flexible API key and model specification options
+
+- **Robust Error Handling:**
+  - Improved fallback mechanisms for image processing
+  - Better error reporting with specific diagnostics
+  - Multiple backup strategies for file reading
+
+- **Image Processing Enhancements:**
+  - More reliable base64 encoding for all image types
+  - Fallback options when Sharp module is unavailable
+  - Better handling of large images with automatic optimization
+
 ## Installation
 
 ### Option 1: Install via npm

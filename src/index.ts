@@ -8,18 +8,23 @@ import { ToolHandlers } from './tool-handlers.js';
 // Define the default model to use when none is specified
 const DEFAULT_MODEL = 'qwen/qwen2.5-vl-32b-instruct:free';
 
+interface ServerOptions {
+  apiKey?: string;
+  defaultModel?: string;
+}
+
 class OpenRouterMultimodalServer {
   private server: Server;
   private toolHandlers!: ToolHandlers; // Using definite assignment assertion
 
-  constructor() {
-    // Retrieve API key and default model from environment variables
-    const apiKey = process.env.OPENROUTER_API_KEY;
-    const defaultModel = process.env.OPENROUTER_DEFAULT_MODEL || DEFAULT_MODEL;
+  constructor(options?: ServerOptions) {
+    // Retrieve API key from options or environment variables
+    const apiKey = options?.apiKey || process.env.OPENROUTER_API_KEY;
+    const defaultModel = options?.defaultModel || process.env.OPENROUTER_DEFAULT_MODEL || DEFAULT_MODEL;
 
     // Check if API key is provided
     if (!apiKey) {
-      throw new Error('OPENROUTER_API_KEY environment variable is required');
+      throw new Error('OpenRouter API key is required. Provide it via options or OPENROUTER_API_KEY environment variable');
     }
 
     // Initialize the server
@@ -55,15 +60,57 @@ class OpenRouterMultimodalServer {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
     console.error('OpenRouter Multimodal MCP server running on stdio');
-    console.error('Using API key from environment variable');
-    console.error('Note: To use OpenRouter Multimodal, add the API key to your environment variables:');
-    console.error('      OPENROUTER_API_KEY=your-api-key');
     
-    const modelDisplay = process.env.OPENROUTER_DEFAULT_MODEL || DEFAULT_MODEL;
-    console.error(`      Using default model: ${modelDisplay}`);
+    // Log model information
+    const modelDisplay = this.toolHandlers.getDefaultModel() || DEFAULT_MODEL;
+    console.error(`Using default model: ${modelDisplay}`);
     console.error('Server is ready to process tool calls. Waiting for input...');
   }
 }
 
-const server = new OpenRouterMultimodalServer();
+// Get MCP configuration if provided
+let mcpOptions: ServerOptions | undefined;
+
+// Check if we're being run as an MCP server with configuration
+if (process.argv.length > 2) {
+  try {
+    const configArg = process.argv.find(arg => arg.startsWith('--config='));
+    if (configArg) {
+      const configPath = configArg.split('=')[1];
+      const configData = require(configPath);
+      
+      // Extract configuration
+      mcpOptions = {
+        apiKey: configData.OPENROUTER_API_KEY || configData.apiKey,
+        defaultModel: configData.OPENROUTER_DEFAULT_MODEL || configData.defaultModel
+      };
+      
+      if (mcpOptions.apiKey) {
+        console.error('Using API key from MCP configuration');
+      }
+    }
+  } catch (error) {
+    console.error('Error parsing MCP configuration:', error);
+  }
+}
+
+// Attempt to parse JSON from stdin to check for MCP server parameters
+if (!mcpOptions?.apiKey) {
+  process.stdin.setEncoding('utf8');
+  process.stdin.once('data', (data) => {
+    try {
+      const firstMessage = JSON.parse(data.toString());
+      if (firstMessage.params && typeof firstMessage.params === 'object') {
+        mcpOptions = {
+          apiKey: firstMessage.params.OPENROUTER_API_KEY || firstMessage.params.apiKey,
+          defaultModel: firstMessage.params.OPENROUTER_DEFAULT_MODEL || firstMessage.params.defaultModel
+        };
+      }
+    } catch (error) {
+      // Not a valid JSON message or no parameters, continue with environment variables
+    }
+  });
+}
+
+const server = new OpenRouterMultimodalServer(mcpOptions);
 server.run().catch(console.error); 

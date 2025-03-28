@@ -344,4 +344,11 @@ export class ToolHandlers {
       }
     });
   }
+
+  /**
+   * Get the default model configured for this server
+   */
+  getDefaultModel(): string | undefined {
+    return this.defaultModel;
+  }
 }

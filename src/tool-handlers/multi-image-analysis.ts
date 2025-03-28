@@ -60,6 +60,28 @@ export interface MultiImageAnalysisToolRequest {
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
+ * Normalizes a file path to be OS-neutral
+ * Handles Windows backslashes, drive letters, etc.
+ */
+function normalizePath(filePath: string): string {
+  // Skip normalization for URLs and data URLs
+  if (filePath.startsWith('http://') || 
+      filePath.startsWith('https://') || 
+      filePath.startsWith('data:')) {
+    return filePath;
+  }
+  
+  // Handle Windows paths and convert them to a format that's usable
+  // First normalize the path according to the OS
+  let normalized = path.normalize(filePath);
+  
+  // Make sure any Windows backslashes are handled
+  normalized = normalized.replace(/\\/g, '/');
+  
+  return normalized;
+}
+
+/**
  * Get MIME type from file extension or data URL
  */
 function getMimeType(url: string): string {
@@ -96,9 +118,12 @@ async function fetchImageAsBuffer(url: string): Promise<Buffer> {
       return Buffer.from(matches[2], 'base64');
     }
     
+    // Normalize the path before proceeding
+    const normalizedUrl = normalizePath(url);
+    
     // Handle file URLs with file:// protocol
-    if (url.startsWith('file://')) {
-      const filePath = url.replace('file://', '');
+    if (normalizedUrl.startsWith('file://')) {
+      const filePath = normalizedUrl.replace('file://', '');
       try {
         return await fs.readFile(filePath);
       } catch (error) {
@@ -108,24 +133,34 @@ async function fetchImageAsBuffer(url: string): Promise<Buffer> {
     }
     
     // Handle absolute and relative file paths
-    if (url.startsWith('/') || url.startsWith('./') || url.startsWith('../') || /^[A-Za-z]:\\/.test(url)) {
+    if (normalizedUrl.startsWith('/') || normalizedUrl.startsWith('./') || normalizedUrl.startsWith('../') || /^[A-Za-z]:\\/.test(normalizedUrl) || /^[A-Za-z]:\//.test(normalizedUrl)) {
       try {
-        return await fs.readFile(url);
+        // Try with normalized path
+        return await fs.readFile(normalizedUrl);
       } catch (error) {
-        console.error(`Error reading file at ${url}:`, error);
-        throw new Error(`Failed to read file: ${url}`);
+        // Fallback to original path if normalized path doesn't work
+        if (normalizedUrl !== url) {
+          try {
+            return await fs.readFile(url);
+          } catch (secondError) {
+            console.error(`Failed to read file with both normalized path (${normalizedUrl}) and original path (${url})`);
+            throw new Error(`Failed to read file: ${url}`);
+          }
+        }
+        console.error(`Error reading file at ${normalizedUrl}:`, error);
+        throw new Error(`Failed to read file: ${normalizedUrl}`);
       }
     }
     
     // Handle http/https URLs
-    if (url.startsWith('http://') || url.startsWith('https://')) {
+    if (normalizedUrl.startsWith('http://') || normalizedUrl.startsWith('https://')) {
       for (let attempt = 0; attempt < MAX_RETRY_ATTEMPTS; attempt++) {
         try {
           // Use AbortController for timeout instead of timeout option
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 15000);
           
-          const response = await fetch(url, {
+          const response = await fetch(normalizedUrl, {
             signal: controller.signal,
             headers: {
               'User-Agent': 'OpenRouter-MCP-Server/1.0'
@@ -141,7 +176,7 @@ async function fetchImageAsBuffer(url: string): Promise<Buffer> {
           
           return Buffer.from(await response.arrayBuffer());
         } catch (error) {
-          console.error(`Error fetching URL (attempt ${attempt + 1}/${MAX_RETRY_ATTEMPTS}): ${url}`, error);
+          console.error(`Error fetching URL (attempt ${attempt + 1}/${MAX_RETRY_ATTEMPTS}): ${normalizedUrl}`, error);
           
           if (attempt < MAX_RETRY_ATTEMPTS - 1) {
             // Exponential backoff with jitter
@@ -163,6 +198,13 @@ async function fetchImageAsBuffer(url: string): Promise<Buffer> {
   
   // TypeScript requires a return statement here, but this is unreachable
   return Buffer.from([]);
+}
+
+/**
+ * Fallback image processing when sharp isn't available
+ */
+function processImageFallback(buffer: Buffer, mimeType: string): Promise<string> {
+  return Promise.resolve(buffer.toString('base64'));
 }
 
 /**
@@ -449,18 +491,5 @@ export async function handleMultiImageAnalysis(
         error_message: error.message
       }
     };
-  }
-}
-
-/**
- * Processes an image with minimal processing when sharp isn't available
- */
-async function processImageFallback(buffer: Buffer, mimeType: string): Promise<string> {
-  try {
-    // Just return the buffer as base64 without processing
-    return buffer.toString('base64');
-  } catch (error) {
-    console.error('Error in fallback image processing:', error);
-    throw error;
   }
 }
