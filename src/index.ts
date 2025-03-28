@@ -15,7 +15,7 @@ class OpenRouterMultimodalServer {
   constructor() {
     // Retrieve API key and default model from environment variables
     const apiKey = process.env.OPENROUTER_API_KEY;
-    const defaultModel = process.env.DEFAULT_MODEL || DEFAULT_MODEL;
+    const defaultModel = process.env.OPENROUTER_DEFAULT_MODEL || DEFAULT_MODEL;
 
     // Check if API key is provided
     if (!apiKey) {

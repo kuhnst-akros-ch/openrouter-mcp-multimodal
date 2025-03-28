@@ -1,13 +1,31 @@
 import path from 'path';
 import { promises as fs } from 'fs';
-import sharp from 'sharp';
+import fetch from 'node-fetch';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import OpenAI from 'openai';
-import fetch from 'node-fetch';
 import { findSuitableFreeModel } from './multi-image-analysis.js';
 
 // Default model for image analysis
 const DEFAULT_FREE_MODEL = 'qwen/qwen2.5-vl-32b-instruct:free';
+
+let sharp: any;
+try {
+  sharp = require('sharp');
+} catch (e) {
+  console.error('Warning: sharp module not available, using fallback image processing');
+  // Mock implementation that just passes through the base64 data
+  sharp = (buffer: Buffer) => ({
+    metadata: async () => ({ width: 800, height: 600 }),
+    resize: () => ({
+      jpeg: () => ({
+        toBuffer: async () => buffer
+      })
+    }),
+    jpeg: () => ({
+      toBuffer: async () => buffer
+    })
+  });
+}
 
 export interface AnalyzeImageToolRequest {
   image_path: string;
@@ -49,10 +67,34 @@ async function fetchImageAsBuffer(url: string): Promise<Buffer> {
   }
 }
 
+/**
+ * Processes an image with minimal processing when sharp isn't available
+ */
+async function processImageFallback(buffer: Buffer): Promise<string> {
+  try {
+    // Just return the buffer as base64 without processing
+    return buffer.toString('base64');
+  } catch (error) {
+    console.error('Error in fallback image processing:', error);
+    throw error;
+  }
+}
+
 async function processImage(buffer: Buffer): Promise<string> {
   try {
+    if (typeof sharp !== 'function') {
+      console.warn('Using fallback image processing (sharp not available)');
+      return processImageFallback(buffer);
+    }
+    
     // Get image metadata
-    const metadata = await sharp(buffer).metadata();
+    let metadata;
+    try {
+      metadata = await sharp(buffer).metadata();
+    } catch (error) {
+      console.warn('Error getting image metadata, using fallback:', error);
+      return processImageFallback(buffer);
+    }
     
     // Calculate dimensions to keep base64 size reasonable
     const MAX_DIMENSION = 800;
@@ -81,39 +123,56 @@ async function processImage(buffer: Buffer): Promise<string> {
     
     return jpegBuffer.toString('base64');
   } catch (error) {
-    console.error('Error processing image:', error);
-    throw error;
+    console.error('Error processing image, using fallback:', error);
+    return processImageFallback(buffer);
   }
 }
 
 /**
- * Converts the image at the given path to a base64 string
+ * Processes an image from a path or base64 string to a proper base64 format for APIs
  */
-async function imageToBase64(imagePath: string): Promise<{ base64: string; mimeType: string }> {
+async function prepareImage(imagePath: string): Promise<{ base64: string; mimeType: string }> {
   try {
-    // Ensure the image path is absolute
-    if (!path.isAbsolute(imagePath)) {
-      throw new McpError(
-        ErrorCode.InvalidParams,
-        'Image path must be absolute'
-      );
+    // Check if already a base64 data URL
+    if (imagePath.startsWith('data:')) {
+      const matches = imagePath.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+      if (!matches || matches.length !== 3) {
+        throw new McpError(ErrorCode.InvalidParams, 'Invalid base64 data URL format');
+      }
+      return { base64: matches[2], mimeType: matches[1] };
+    }
+    
+    // Check if image is a URL
+    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+      try {
+        const buffer = await fetchImageAsBuffer(imagePath);
+        const processed = await processImage(buffer);
+        return { base64: processed, mimeType: 'image/jpeg' }; // We convert everything to JPEG
+      } catch (error: any) {
+        throw new McpError(ErrorCode.InvalidParams, `Failed to fetch image from URL: ${error.message}`);
+      }
+    }
+    
+    // Handle file paths
+    let absolutePath = imagePath;
+    
+    // Ensure the image path is absolute if it's a file path
+    if (!imagePath.startsWith('data:') && !path.isAbsolute(imagePath)) {
+      throw new McpError(ErrorCode.InvalidParams, 'Image path must be absolute');
     }
 
-    // Check if the file exists
     try {
-      await fs.access(imagePath);
+      // Check if the file exists
+      await fs.access(absolutePath);
     } catch (error) {
-      throw new McpError(
-        ErrorCode.InvalidParams,
-        `File not found: ${imagePath}`
-      );
+      throw new McpError(ErrorCode.InvalidParams, `File not found: ${absolutePath}`);
     }
 
     // Read the file as a buffer
-    const buffer = await fs.readFile(imagePath);
+    const buffer = await fs.readFile(absolutePath);
     
     // Determine MIME type from file extension
-    const extension = path.extname(imagePath).toLowerCase();
+    const extension = path.extname(absolutePath).toLowerCase();
     let mimeType: string;
     
     switch (extension) {
@@ -137,12 +196,11 @@ async function imageToBase64(imagePath: string): Promise<{ base64: string; mimeT
         mimeType = 'application/octet-stream';
     }
     
-    // Convert buffer to base64
-    const base64 = buffer.toString('base64');
-    
-    return { base64, mimeType };
+    // Process and optimize the image
+    const processed = await processImage(buffer);
+    return { base64: processed, mimeType };
   } catch (error) {
-    console.error('Error converting image to base64:', error);
+    console.error('Error preparing image:', error);
     throw error;
   }
 }
@@ -160,23 +218,21 @@ export async function handleAnalyzeImage(
   try {
     // Validate inputs
     if (!args.image_path) {
-      throw new McpError(ErrorCode.InvalidParams, 'An image path is required');
+      throw new McpError(ErrorCode.InvalidParams, 'An image path, URL, or base64 data is required');
     }
     
-    if (!args.question) {
-      throw new McpError(ErrorCode.InvalidParams, 'A question about the image is required');
-    }
+    const question = args.question || "What's in this image?";
     
-    console.error(`Processing image: ${args.image_path}`);
+    console.error(`Processing image: ${args.image_path.substring(0, 100)}${args.image_path.length > 100 ? '...' : ''}`);
     
     // Convert the image to base64
-    const { base64, mimeType } = await imageToBase64(args.image_path);
+    const { base64, mimeType } = await prepareImage(args.image_path);
     
     // Create the content array for the OpenAI API
     const content = [
       {
         type: 'text',
-        text: args.question
+        text: question
       },
       {
         type: 'image_url',

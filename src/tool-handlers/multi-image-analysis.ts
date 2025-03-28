@@ -1,5 +1,6 @@
 import fetch from 'node-fetch';
-import sharp from 'sharp';
+// Remove the sharp import to avoid conflicts with our dynamic import
+// import sharp from 'sharp';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import OpenAI from 'openai';
 import path from 'path';
@@ -7,6 +8,26 @@ import { promises as fs } from 'fs';
 import { tmpdir } from 'os';
 // Remove uuid import as we'll use a simple random string generator instead
 // import { v4 as uuidv4 } from 'uuid';
+
+// Setup sharp with fallback
+let sharp: any;
+try {
+  sharp = require('sharp');
+} catch (e) {
+  console.error('Warning: sharp module not available, using fallback image processing');
+  // Mock implementation that just passes through the base64 data
+  sharp = (buffer: Buffer) => ({
+    metadata: async () => ({ width: 800, height: 600 }),
+    resize: () => ({
+      jpeg: () => ({
+        toBuffer: async () => buffer
+      })
+    }),
+    jpeg: () => ({
+      toBuffer: async () => buffer
+    })
+  });
+}
 
 // Default model for image analysis
 const DEFAULT_FREE_MODEL = 'qwen/qwen2.5-vl-32b-instruct:free';
@@ -149,13 +170,25 @@ async function fetchImageAsBuffer(url: string): Promise<Buffer> {
  */
 async function processImage(buffer: Buffer, mimeType: string): Promise<string> {
   try {
+    if (typeof sharp !== 'function') {
+      console.warn('Using fallback image processing (sharp not available)');
+      return processImageFallback(buffer, mimeType);
+    }
+    
     // Create a temporary directory for processing if needed
     const tempDir = path.join(tmpdir(), `openrouter-mcp-${generateRandomId()}`);
     await fs.mkdir(tempDir, { recursive: true });
     
     // Get image info
     let sharpInstance = sharp(buffer);
-    const metadata = await sharpInstance.metadata();
+    let metadata;
+    
+    try {
+      metadata = await sharpInstance.metadata();
+    } catch (error) {
+      console.warn('Error getting image metadata, using fallback:', error);
+      return processImageFallback(buffer, mimeType);
+    }
     
     // Skip processing for small images
     if (metadata.width && metadata.height && 
@@ -177,19 +210,20 @@ async function processImage(buffer: Buffer, mimeType: string): Promise<string> {
       }
     }
     
-    // Convert to JPEG for consistency and small size
-    const processedBuffer = await sharpInstance
-      .jpeg({ quality: JPEG_QUALITY })
-      .toBuffer();
-    
-    return processedBuffer.toString('base64');
+    try {
+      // Convert to JPEG for consistency and small size
+      const processedBuffer = await sharpInstance
+        .jpeg({ quality: JPEG_QUALITY })
+        .toBuffer();
+      
+      return processedBuffer.toString('base64');
+    } catch (error) {
+      console.warn('Error in final image processing, using fallback:', error);
+      return processImageFallback(buffer, mimeType);
+    }
   } catch (error) {
-    console.error('Error processing image:', error);
-    
-    // If sharp processing fails, return the original buffer
-    // This is a fallback to ensure we don't completely fail on processing errors
-    console.error('Returning original image without processing');
-    return buffer.toString('base64');
+    console.error('Error processing image, using fallback:', error);
+    return processImageFallback(buffer, mimeType);
   }
 }
 
@@ -265,7 +299,7 @@ export async function findSuitableFreeModel(openai: OpenAI): Promise<string> {
 }
 
 /**
- * Process and analyze multiple images using OpenRouter
+ * Main handler for multi-image analysis
  */
 export async function handleMultiImageAnalysis(
   request: { params: { arguments: MultiImageAnalysisToolRequest } },
@@ -276,65 +310,50 @@ export async function handleMultiImageAnalysis(
   
   try {
     // Validate inputs
-    if (!args.images || args.images.length === 0) {
+    if (!args.images || !Array.isArray(args.images) || args.images.length === 0) {
       throw new McpError(ErrorCode.InvalidParams, 'At least one image is required');
     }
     
     if (!args.prompt) {
-      throw new McpError(ErrorCode.InvalidParams, 'A prompt is required');
+      throw new McpError(ErrorCode.InvalidParams, 'A prompt for analyzing the images is required');
     }
     
-    // Prepare content array for the message
-    const content: Array<any> = [{
-      type: 'text',
-      text: args.prompt
-    }];
+    console.error(`Processing ${args.images.length} images`);
     
-    // Track successful and failed images for reporting
-    const successfulImages = [];
-    const failedImages = [];
-    
-    // Process each image
-    for (const [index, image] of args.images.entries()) {
-      try {
-        console.error(`Processing image ${index + 1}/${args.images.length}: ${image.url.substring(0, 50)}...`);
-        
-        // Get MIME type
-        const mimeType = getMimeType(image.url);
-        
-        // Fetch and process the image
-        const imageBuffer = await fetchImageAsBuffer(image.url);
-        const base64Image = await processImage(imageBuffer, mimeType);
-        
-        // Use JPEG as the output format for consistency
-        const outputMimeType = 'image/jpeg';
-        
-        // Add to content
-        content.push({
-          type: 'image_url',
-          image_url: {
-            url: `data:${outputMimeType};base64,${base64Image}`
+    // Process each image and convert to base64 if needed
+    const processedImages = await Promise.all(
+      args.images.map(async (image, index) => {
+        try {
+          // Skip processing if already a data URL
+          if (image.url.startsWith('data:')) {
+            console.error(`Image ${index + 1} is already in base64 format`);
+            return image;
           }
-        });
-        
-        successfulImages.push(image.url);
-      } catch (error) {
-        console.error(`Error processing image ${index + 1} (${image.url.substring(0, 30)}...):`, error);
-        failedImages.push({url: image.url, error: error instanceof Error ? error.message : String(error)});
-        // Continue with other images if one fails
-      }
-    }
-    
-    // If no images were successfully processed
-    if (content.length === 1) {
-      const errorDetails = failedImages.map(img => `${img.url.substring(0, 30)}...: ${img.error}`).join('; ');
-      throw new Error(`Failed to process any of the provided images. Errors: ${errorDetails}`);
-    }
+          
+          console.error(`Processing image ${index + 1}: ${image.url.substring(0, 100)}${image.url.length > 100 ? '...' : ''}`);
+          
+          // Get MIME type
+          const mimeType = getMimeType(image.url);
+          
+          // Fetch and process the image
+          const buffer = await fetchImageAsBuffer(image.url);
+          const base64 = await processImage(buffer, mimeType);
+          
+          return {
+            url: `data:${mimeType === 'application/octet-stream' ? 'image/jpeg' : mimeType};base64,${base64}`,
+            alt: image.alt
+          };
+        } catch (error: any) {
+          console.error(`Error processing image ${index + 1}:`, error);
+          throw new Error(`Failed to process image ${index + 1}: ${image.url}. Error: ${error.message}`);
+        }
+      })
+    );
     
     // Select model with priority:
     // 1. User-specified model
     // 2. Default model from environment
-    // 3. Default free vision model (qwen/qwen2.5-vl-32b-instruct:free)
+    // 3. Default free vision model
     let model = args.model || defaultModel || DEFAULT_FREE_MODEL;
     
     // If a model is specified but not our default free model, verify it exists
@@ -348,7 +367,30 @@ export async function handleMultiImageAnalysis(
     }
     
     console.error(`Making API call with model: ${model}`);
-    console.error(`Successfully processed ${successfulImages.length} images, ${failedImages.length} failed`);
+    
+    // Build content array for the API call
+    const content: Array<{ 
+      type: string; 
+      text?: string; 
+      image_url?: { 
+        url: string 
+      } 
+    }> = [
+      {
+        type: 'text',
+        text: args.prompt
+      }
+    ];
+    
+    // Add each processed image to the content array
+    processedImages.forEach(image => {
+      content.push({
+        type: 'image_url',
+        image_url: {
+          url: image.url
+        }
+      });
+    });
     
     // Make the API call
     const completion = await openai.chat.completions.create({
@@ -359,16 +401,19 @@ export async function handleMultiImageAnalysis(
       }] as any
     });
     
-    // Format the response
+    // Get response text and format if requested
     let responseText = completion.choices[0].message.content || '';
     
-    // Add information about failed images if any
-    if (failedImages.length > 0) {
-      const formattedErrors = args.markdown_response !== false
-        ? `\n\n---\n\n**Note:** ${failedImages.length} image(s) could not be processed:\n${failedImages.map((img, i) => `- Image ${i+1}: ${img.error}`).join('\n')}`
-        : `\n\nNote: ${failedImages.length} image(s) could not be processed: ${failedImages.map((img, i) => `Image ${i+1}: ${img.error}`).join('; ')}`;
-      
-      responseText += formattedErrors;
+    // Format as markdown if requested
+    if (args.markdown_response) {
+      // Simple formatting enhancements
+      responseText = responseText
+        // Add horizontal rule after sections
+        .replace(/^(#{1,3}.*)/gm, '$1\n\n---')
+        // Ensure proper spacing for lists
+        .replace(/^(\s*[-*•]\s.+)$/gm, '\n$1')
+        // Convert plain URLs to markdown links
+        .replace(/(https?:\/\/[^\s]+)/g, '[$1]($1)');
     }
     
     // Return the analysis result
@@ -381,12 +426,10 @@ export async function handleMultiImageAnalysis(
       ],
       metadata: {
         model: completion.model,
-        usage: completion.usage,
-        successful_images: successfulImages.length,
-        failed_images: failedImages.length
+        usage: completion.usage
       }
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error in multi-image analysis:', error);
     
     if (error instanceof McpError) {
@@ -397,14 +440,27 @@ export async function handleMultiImageAnalysis(
       content: [
         {
           type: 'text',
-          text: `Error analyzing images: ${error instanceof Error ? error.message : String(error)}`,
+          text: `Error analyzing images: ${error.message}`,
         },
       ],
       isError: true,
       metadata: {
-        error_type: error instanceof Error ? error.constructor.name : 'Unknown',
-        error_message: error instanceof Error ? error.message : String(error)
+        error_type: error.constructor.name,
+        error_message: error.message
       }
     };
+  }
+}
+
+/**
+ * Processes an image with minimal processing when sharp isn't available
+ */
+async function processImageFallback(buffer: Buffer, mimeType: string): Promise<string> {
+  try {
+    // Just return the buffer as base64 without processing
+    return buffer.toString('base64');
+  } catch (error) {
+    console.error('Error in fallback image processing:', error);
+    throw error;
   }
 }

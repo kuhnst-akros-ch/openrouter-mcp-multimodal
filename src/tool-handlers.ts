@@ -137,7 +137,7 @@ export class ToolHandlers {
             properties: {
               image_path: {
                 type: 'string',
-                description: 'Path to the image file to analyze (must be an absolute path)',
+                description: 'Path to the image file to analyze (can be an absolute file path, URL, or base64 data URL starting with "data:")',
               },
               question: {
                 type: 'string',
@@ -167,7 +167,7 @@ export class ToolHandlers {
                   properties: {
                     url: {
                       type: 'string',
-                      description: 'URL or data URL of the image (use file:// URL prefix for local files, http(s):// for web images, or data: for base64 encoded images)',
+                      description: 'URL or data URL of the image (use http(s):// for web images, absolute file paths for local files, or data:image/xxx;base64,... for base64 encoded images)',
                     },
                     alt: {
                       type: 'string',
